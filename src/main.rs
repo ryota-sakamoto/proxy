@@ -4,13 +4,15 @@ extern crate reqwest;
 
 use futures::future::{Future, ok};
 use hyper::{
-    header::{ContentLength, ContentType},
+    header::{Headers, ContentLength, ContentType},
     Method,
     server::{Http, Request, Response, Service}
 };
 
+#[derive(Debug)]
 struct ProxyResponse {
     method: Method,
+    headers: Headers,
     body: String,
 }
 impl ProxyResponse {
@@ -18,15 +20,16 @@ impl ProxyResponse {
         ProxyResponse {
             method: method,
             body: text.to_string(),
+            headers: Headers::new(),
         }
     }
 
     fn parse_response(res: &mut reqwest::Response, method: Method) -> Self {
-        let h = res.headers().get::<ContentType>();
-        println!("{:?}", h);
+        let header = res.headers().clone();
         ProxyResponse {
             method: method,
             body: res.text().unwrap(),
+            headers: header,
         }
     }
 }
@@ -38,16 +41,14 @@ impl Server {
         } else {
             format!("{}", req.uri())
         };
-        println!("{} {}", req.method(), uri);
         let method = req.method().clone();
-        if uri.contains("http://") || uri.contains("https://") {
+            if uri.contains("http://") || uri.contains("https://") {
             match method {
                 Method::Get => {
                     let mut res = reqwest::get(&uri).unwrap();
                     ProxyResponse::parse_response(&mut res, method)
                 },
                 Method::Connect => {
-                    println!("{:?}", req);
                     ProxyResponse::new("", method)
                 },
                 _ => {
@@ -71,7 +72,7 @@ impl Service for Server {
         Box::new(
             ok(
                 Response::new()
-                    .with_header(ContentLength(body.len() as u64))
+                    .with_headers(res.headers)
                     .with_body(body)
             )
         )
