@@ -4,21 +4,58 @@ extern crate reqwest;
 
 use futures::future::{Future, ok};
 use hyper::{
-    header::ContentLength,
+    header::{ContentLength, ContentType},
+    Method,
     server::{Http, Request, Response, Service}
 };
 
+struct ProxyResponse {
+    method: Method,
+    body: String,
+}
+impl ProxyResponse {
+    fn new(text: &str, method: Method) -> Self {
+        ProxyResponse {
+            method: method,
+            body: text.to_string(),
+        }
+    }
+
+    fn parse_response(res: &mut reqwest::Response, method: Method) -> Self {
+        let h = res.headers().get::<ContentType>();
+        println!("{:?}", h);
+        ProxyResponse {
+            method: method,
+            body: res.text().unwrap(),
+        }
+    }
+}
 struct Server;
 impl Server {
-    fn send_request(&self, req: Request) -> Option<String> {
-        let uri = format!("{}", req.uri());
-        println!("{}", uri);
-        // TODO
-        if !uri.contains(":443") {
-            let text = reqwest::get(&uri).unwrap().text().unwrap();
-            Some(text)
+    fn send_request(&self, req: Request) -> ProxyResponse {
+        let uri = if req.method() == &Method::Connect {
+            format!("https://{}", format!("{}", req.uri()))            
         } else {
-            None
+            format!("{}", req.uri())
+        };
+        println!("{} {}", req.method(), uri);
+        let method = req.method().clone();
+        if uri.contains("http://") || uri.contains("https://") {
+            match method {
+                Method::Get => {
+                    let mut res = reqwest::get(&uri).unwrap();
+                    ProxyResponse::parse_response(&mut res, method)
+                },
+                Method::Connect => {
+                    println!("{:?}", req);
+                    ProxyResponse::new("", method)
+                },
+                _ => {
+                    ProxyResponse::new("", method)
+                }
+            }
+        } else {
+            ProxyResponse::new("you mut use proxy", method)
         }
     }
 }
@@ -29,8 +66,8 @@ impl Service for Server {
     type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
 
     fn call(&self, req: Request) -> Self::Future {
-        let body = self.send_request(req);
-        let body = body.map_or("".to_string(), |s| s);
+        let res = self.send_request(req);
+        let body = res.body;
         Box::new(
             ok(
                 Response::new()
