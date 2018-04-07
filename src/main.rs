@@ -2,6 +2,10 @@ extern crate hyper;
 extern crate futures;
 extern crate reqwest;
 
+use std::{
+    net::{TcpListener, Shutdown},
+    io::prelude::*,
+};
 use futures::future::{Future, ok};
 use hyper::{
     header::{Headers, ContentLength, ContentType},
@@ -80,7 +84,70 @@ impl Service for Server {
 }
 
 fn main() {
-    let addr = "192.168.3.5:8080".parse().unwrap();
-    let server = Http::new().bind(&addr, || Ok(Server)).unwrap();
-    server.run().unwrap();
+    let server = TcpListener::bind("192.168.3.5:8080").expect("Can not bind");
+    for stream in server.incoming() {
+        let mut stream = stream.unwrap();
+        let mut buf = [0u8; 1024];
+        loop {
+            match stream.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    match std::str::from_utf8(&buf[0..n]) {
+                        Ok(data) => {
+                            let header = data.split("\r\n").filter(|s| s != &"").collect::<Vec<&str>>();
+
+                            let request_header = header[0].split(" ").collect::<Vec<&str>>();
+                            let method = request_header[0];
+                            let uri = request_header[1];
+                            let protcol = request_header[2];
+
+                            if start_with(uri, "http://") || start_with(uri, "https://") {
+                                match method {
+                                    "GET" => {
+                                        let r = reqwest::get(uri).unwrap();
+                                        println!("{:?}", r);
+                                    },
+                                    "CONNECT" => {
+                                        println!("{} {}", method, uri);
+                                    },
+                                    m => {
+                                        println!("unknown method: {}", m);
+                                    },
+                                }
+                            } else {
+                                println!("local");
+                            }
+                            stream.write(b"HTTP/1.1 200 OK\r\nConnection: Close\r\n\r\n").expect("stream write error");
+                            stream.shutdown(Shutdown::Both).expect("stream shutdown error");
+                        },
+                        _ => break,
+                    }
+                },
+                _ => break,
+            }
+        }
+    }
+}
+
+fn start_with(elem: &str, t: &str) -> bool {
+    if elem.len() < t.len() {
+        false
+    } else {
+        let mut _elem = elem.chars();
+        let mut result = true;
+        for _t in t.chars() {
+            if _elem.next().unwrap() != _t {
+                result = false;
+                break;
+            }
+        }
+        result
+    }
+}
+
+#[test]
+fn start_with_test() {
+    assert!(start_with("http://example.com", "http://"));
+    assert!(!start_with("http://example.com", "https://"));
+    assert!(!start_with("abcde", "abcd"));
 }
