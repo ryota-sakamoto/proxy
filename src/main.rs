@@ -3,7 +3,7 @@ extern crate futures;
 extern crate reqwest;
 
 use std::{
-    net::{TcpListener, Shutdown},
+    net::{TcpStream, TcpListener, Shutdown},
     io::prelude::*,
 };
 use futures::future::{Future, ok};
@@ -64,27 +64,9 @@ impl Server {
         }
     }
 }
-impl Service for Server {
-    type Request = Request;
-    type Response = Response;
-    type Error = hyper::Error;
-    type Future = Box<Future<Item = Self::Response, Error = Self::Error>>;
-
-    fn call(&self, req: Request) -> Self::Future {
-        let res = self.send_request(req);
-        let body = res.body;
-        Box::new(
-            ok(
-                Response::new()
-                    .with_headers(res.headers)
-                    .with_body(body)
-            )
-        )
-    }
-}
 
 fn main() {
-    let server = TcpListener::bind("192.168.3.5:8080").expect("Can not bind");
+    let server = TcpListener::bind("192.168.3.3:8080").expect("Can not bind");
     for stream in server.incoming() {
         let mut stream = stream.unwrap();
         let mut buf = [0u8; 1024];
@@ -98,27 +80,57 @@ fn main() {
 
                             let request_header = header[0].split(" ").collect::<Vec<&str>>();
                             let method = request_header[0];
-                            let uri = request_header[1];
+                            let mut uri = request_header[1].to_string();
+                            println!("{} {}", method, uri);
+                            if uri.contains(":443") {
+                                uri = format!("https://{}", uri.replace(":443", ""));
+                            }
+                            let uri = &uri;
                             let protcol = request_header[2];
 
                             if start_with(uri, "http://") || start_with(uri, "https://") {
                                 match method {
                                     "GET" => {
                                         let r = reqwest::get(uri).unwrap();
-                                        println!("{:?}", r);
+                                        // println!("{:?}", r);
+                                        stream.write(b"HTTP/1.1 200 OK\r\nConnection: Close\r\n\r\n").expect("stream write error");
+                                        stream.shutdown(Shutdown::Both).expect("stream shutdown error");
                                     },
                                     "CONNECT" => {
-                                        println!("{} {}", method, uri);
+                                        stream.write(b"HTTP/1.1 200 Connection Established\r\n\r\n").expect("stream write error");
+
+                                        let mut ssl_stream = TcpStream::connect(request_header[1]).expect("open stream connect error");
+
+                                        let mut buf = [0u8; 1024];
+                                        stream.read(&mut buf).expect("stream read error 2");
+                                        ssl_stream.write(&buf).expect("stream weite error 2");
+
+                                        let mut res = [0u8; 1024];
+                                        ssl_stream.read(&mut res);
+                                        stream.write(&res);
+                                        
+                                        let mut res2 = [0u8; 32 * 1024];
+                                        while let Ok(n) = ssl_stream.read(&mut res2) {
+                                            if n == 0 {
+                                                break;
+                                            }
+                                            stream.write(&res2[..n]);
+                                        }
+
+                                        while let Ok(n) = stream.read(&mut res2) {
+                                            if n == 0 {
+                                                break;
+                                            }
+                                            ssl_stream.write(&res2[..n]);                                            
+                                        }
                                     },
                                     m => {
                                         println!("unknown method: {}", m);
                                     },
                                 }
                             } else {
-                                println!("local");
+                                println!("local {:?}", uri);
                             }
-                            stream.write(b"HTTP/1.1 200 OK\r\nConnection: Close\r\n\r\n").expect("stream write error");
-                            stream.shutdown(Shutdown::Both).expect("stream shutdown error");
                         },
                         _ => break,
                     }
