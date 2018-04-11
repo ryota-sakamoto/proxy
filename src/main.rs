@@ -40,13 +40,15 @@ fn main() {
                                     let mut r = r.unwrap();
                                     stream.write(b"HTTP/1.1 200 OK\r\n");
                                     for item in r.headers().iter() {
-                                        stream.write(format!("{}", item).as_bytes());
+                                        if !item.name().contains("Transfer-Encoding") {
+                                            stream.write(format!("{}", item).as_bytes());
+                                        }
                                     }
-                                    // let body = r.text().unwrap();                                    
-                                    // stream.write(format!("Content-Length: {}\r\n", body.len()).as_bytes());
-                                    // stream.write(b"Connection: Keep-Alive\r\n");
+                                    let mut buf = Vec::new();
+                                    r.copy_to(&mut buf);
+                                    stream.write(format!("Content-Length: {}\r\n", buf.len()).as_bytes());
                                     stream.write(b"\r\n");
-                                    stream.write(b"hello");
+                                    stream.write(&buf);
                                     // stream.write(body.as_bytes());
                                     stream.write(b"\r\n");
                                     stream.shutdown(Shutdown::Both).expect("stream shutdown error");
