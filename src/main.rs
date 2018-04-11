@@ -32,8 +32,23 @@ fn main() {
                         if start_with(uri, "http://") || start_with(uri, "https://") {
                             match method {
                                 "GET" => {
-                                    let r = reqwest::get(uri).unwrap();
-                                    stream.write(b"HTTP/1.1 200 OK\r\nConnection: Close\r\n\r\n").expect("stream write error");
+                                    let mut r = reqwest::get(uri);
+                                    if let Err(e) = r {
+                                        println!("err: {:?}", e);
+                                        continue;
+                                    }
+                                    let mut r = r.unwrap();
+                                    stream.write(b"HTTP/1.1 200 OK\r\n");
+                                    for item in r.headers().iter() {
+                                        stream.write(format!("{}", item).as_bytes());
+                                    }
+                                    // let body = r.text().unwrap();                                    
+                                    // stream.write(format!("Content-Length: {}\r\n", body.len()).as_bytes());
+                                    // stream.write(b"Connection: Keep-Alive\r\n");
+                                    stream.write(b"\r\n");
+                                    stream.write(b"hello");
+                                    // stream.write(body.as_bytes());
+                                    stream.write(b"\r\n");
                                     stream.shutdown(Shutdown::Both).expect("stream shutdown error");
                                 },
                                 "CONNECT" => {
@@ -56,7 +71,11 @@ fn main() {
                                 },
                             }
                         } else {
-                            println!("local {:?}", uri);
+                            let res = local_route(&uri);
+                            stream.write(b"HTTP/1.1 200 OK\r\n\r\n");
+                            stream.write(res.as_bytes());
+                            stream.write(b"\r\n");
+                            stream.shutdown(Shutdown::Both).expect("stream shutdown error");                            
                         }
                     },
                     _ => {},
@@ -65,6 +84,10 @@ fn main() {
             Err(e) => panic!(e),
         }
     }
+}
+
+fn local_route(uri: &str) -> String {
+    format!("{}", uri)
 }
 
 fn start_with(elem: &str, t: &str) -> bool {
