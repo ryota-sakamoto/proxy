@@ -13,6 +13,72 @@ use std::{
     }
 };
 
+#[derive(Debug)]
+struct ClientHello {
+    msg_type: u8,
+    lengh: [u8; 3],
+    client_version: [u8; 2],
+    random: Vec<u8>,
+    session_id: Vec<u8>,
+    cipher_suite: Vec<u8>,
+    compression_method : Vec<u8>,
+    extensions: Vec<u8>,
+}
+
+impl ClientHello {
+    fn get_handshake_type<'a>(&self) -> &'a str {
+        match self.msg_type {
+            0 => "HelloRequest",
+            1 => "ClientHello",
+            2 => "ServerHello",
+            11 => "Certificate",
+            12 => "ServerKeyExchange",
+            _ => "Unknown",
+        }
+    }
+
+    fn get_tls_version<'a>(&self) -> &'a str {
+        match (self.client_version[0], self.client_version[1]) {
+            (3, 0) => "SSLV3",
+            (3, 1) => "TLSv1.0",
+            (3, 2) => "TLSv1.1",
+            (3, 3) => "TLSv1.2",
+            _ => "Unknown",
+        }
+    }
+}
+
+// TODO refactoring
+impl From<Vec<u8>> for ClientHello {
+    fn from(vec: Vec<u8>) -> Self {
+        let random = &vec[11..43];
+        let session_id_end = 44 + vec[43] as usize;
+        let session_id = &vec[44..session_id_end];
+        let cipher_suite_length = [vec[session_id_end] as u64, vec[session_id_end + 1] as u64];
+        let cipher_suite_length = (cipher_suite_length[0] << 8) + cipher_suite_length[1];
+        let cipher_suite = &vec[session_id_end + 2 .. session_id_end + 2 + cipher_suite_length as usize];
+        let compression_method_length_position = (session_id_end + 2 + cipher_suite.len()) as usize;
+        let compression_method_length = vec[compression_method_length_position] as usize;
+        let compression_method_end = compression_method_length_position + 1 + compression_method_length;
+        let compression_method = &vec[compression_method_length_position + 1 .. compression_method_end];
+        let extensions_length = [vec[compression_method_end] as u64, vec[compression_method_end + 1] as u64];
+        let extensions_length = (extensions_length[0] << 8) + extensions_length[1];
+        let extensions_start = compression_method_end + 2;
+        let extensions = &vec[extensions_start..extensions_start + extensions_length as usize];
+
+        ClientHello {
+            msg_type: vec[5],
+            lengh: [vec[6], vec[7], vec[8]],
+            client_version: [vec[9], vec[10]],
+            random: random.to_vec(),
+            session_id: session_id.to_vec(),
+            cipher_suite: cipher_suite.to_vec(),
+            compression_method : compression_method.to_vec(),
+            extensions: extensions.to_vec(),
+        }
+    }
+}
+
 fn main() {
     let port = get_port(&mut args()).expect("Invalid Port");
     let server_ip = format!("127.0.0.1:{}", port);
