@@ -1,9 +1,23 @@
 extern crate reqwest;
 
-use std::{io::prelude::*, net::{Shutdown, TcpListener, TcpStream}};
+use std::{
+    env::{
+        args,
+        Args
+    },
+    io::prelude::*,
+    net::{
+        Shutdown,
+        TcpListener,
+        TcpStream
+    }
+};
 
 fn main() {
-    let server = TcpListener::bind("192.168.3.3:8080").expect("Can not bind");
+    let port = get_port(&mut args()).expect("Invalid Port");
+    let server_ip = format!("127.0.0.1:{}", port);
+    let server = TcpListener::bind(server_ip.clone()).expect("Can not bind");
+    println!("Start Proxy Server: {}", server_ip);
     for stream in server.incoming() {
         let mut stream = stream.unwrap();
         std::thread::spawn(move || {
@@ -15,6 +29,20 @@ fn main() {
             }
         });
     }
+}
+
+fn get_port(arg: &mut Args) -> Result<u16, std::num::ParseIntError> {
+    let mut port = 8080;
+    let mut use_env = false;
+    while let Some(elem) = arg.next() {
+        if elem == "-p" {
+            use_env = true;
+        } else if use_env {
+            port = elem.parse()?;
+            break;
+        }
+    }
+    Ok(port)
 }
 
 fn handle(stream: &mut TcpStream) -> Result<(), Box<std::error::Error>> {
