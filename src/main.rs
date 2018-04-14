@@ -79,6 +79,42 @@ impl From<Vec<u8>> for ClientHello {
     }
 }
 
+// TODO refactoring
+#[derive(Debug)]
+struct ServerHello {
+    msg_type: u8,
+    lengh: [u8; 3],
+    version: [u8; 2],
+    random: Vec<u8>,
+    session_id: Vec<u8>,
+    cipher_suites: [u8; 2],
+    compression_methods: u8,
+    extensions: Vec<u8>,
+}
+
+impl From<Vec<u8>> for ServerHello {
+    fn from(vec: Vec<u8>) -> Self {
+        let random = &vec[11..43];
+        let session_id_length = vec[43] as usize;
+        let session_id = &vec[44 .. 44 + session_id_length];
+        let cipher_suites_start = 44 + session_id_length;
+        let extensions_length = [vec[cipher_suites_start + 3] as u64, vec[cipher_suites_start + 4] as u64];
+        let extensions_length = (extensions_length[0] << 8) + extensions_length[1];
+        let extensions = &vec[cipher_suites_start + 5 .. cipher_suites_start + 5 + extensions_length as usize];
+
+        ServerHello {
+            msg_type: vec[5],
+            lengh: [vec[6], vec[7], vec[8]],
+            version: [vec[9], vec[10]],
+            random: random.to_vec(),
+            session_id: session_id.to_vec(),
+            cipher_suites: [vec[cipher_suites_start], vec[cipher_suites_start + 1]],
+            compression_methods: vec[cipher_suites_start + 2],
+            extensions: extensions.to_vec(),
+        }
+    }
+}
+
 fn main() {
     let port = get_port(&mut args()).expect("Invalid Port");
     let server_ip = format!("127.0.0.1:{}", port);
