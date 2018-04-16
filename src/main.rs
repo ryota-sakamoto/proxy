@@ -115,6 +115,35 @@ impl From<Vec<u8>> for ServerHello {
     }
 }
 
+// TODO refactoring
+#[derive(Debug)]
+struct CertificateMessage {
+    msg_type: u8,
+    lengh: [u8; 3],
+    first_certificate: Vec<u8>,
+    second_certificate: Vec<u8>,
+}
+
+impl From<Vec<u8>> for CertificateMessage {
+    fn from(vec: Vec<u8>) -> Self {
+        let first_length = [vec[12] as u64, vec[13] as u64, vec[14] as u64];
+        let first_length = ((first_length[0] << 16) + (first_length[1] << 8) + first_length[2]) as usize;
+        let first_length_end = first_length + 15;
+        let first_certificate = &vec[15..first_length_end];
+
+        let second_length = [vec[first_length_end] as u64, vec[first_length_end + 1] as u64, vec[first_length_end + 2] as u64];
+        let second_length = ((second_length[0] << 16) + (second_length[1] << 8) + second_length[2]) as usize;
+        let second_certificate = &vec[first_length_end + 3 .. first_length_end + 3 + second_length];
+
+        CertificateMessage{
+            msg_type: vec[5],
+            lengh: [vec[6], vec[7], vec[8]],
+            first_certificate: first_certificate.to_vec(),
+            second_certificate: second_certificate.to_vec(),
+        }
+    }
+}
+
 fn main() {
     let port = get_port(&mut args()).expect("Invalid Port");
     let server_ip = format!("127.0.0.1:{}", port);
