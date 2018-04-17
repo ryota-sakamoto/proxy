@@ -33,6 +33,10 @@ impl ClientHello {
             2 => "ServerHello",
             11 => "Certificate",
             12 => "ServerKeyExchange",
+            13 => "CertificateRequest",
+            14 => "ServerHelloDone",
+            15 => "CertificateVerify",
+            16 => "ClientKeyEnchange",
             _ => "Unknown",
         }
     }
@@ -135,6 +139,24 @@ impl From<Vec<u8>> for CertificateMessage {
             msg_type: vec[5],
             lengh: [vec[6], vec[7], vec[8]],
             certificate: certificate.to_vec(),
+        }
+    }
+}
+
+// TODO refactoring
+#[derive(Debug)]
+struct ClientKeyEnchange {
+    data: Vec<u8>,
+}
+
+impl From<Vec<u8>> for ClientKeyEnchange {
+    fn from(vec: Vec<u8>) -> Self {
+        let length = [vec[6] as u64, vec[7] as u64, vec[8] as u64];
+        let length = ((length[0] << 16) + (length[1] << 8) + length[2]) as usize;
+        let data = &vec[9 .. length + 9];
+
+        ClientKeyEnchange {
+            data: data.to_vec(),
         }
     }
 }
