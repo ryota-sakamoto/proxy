@@ -250,6 +250,10 @@ fn handle(stream: &mut TcpStream) -> Result<(), Box<std::error::Error>> {
                 let n = stream.read(&mut buf)?;
                 ssl_stream.write(&buf[..n])?;
 
+                let mut buf = [0u8; 1024];
+                let n = ssl_stream.read(&mut buf)?;
+                stream.write(&buf[..n])?;
+
                 let mut a = stream.try_clone()?;
                 let mut b = ssl_stream.try_clone()?;
 
