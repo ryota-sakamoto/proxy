@@ -238,6 +238,18 @@ fn handle(stream: &mut TcpStream) -> Result<(), Box<std::error::Error>> {
                 let mut ssl_stream =
                     TcpStream::connect(request_header[1])?;
 
+                let mut buf = [0u8; 1024];
+                let n = stream.read(&mut buf)?;
+                ssl_stream.write(&buf[..n])?;
+
+                let mut res = [0u8; 32 * 1024];
+                let n = ssl_stream.read(&mut res)?;
+                stream.write(&res[..n])?;
+
+                let mut buf = [0u8; 1024];
+                let n = stream.read(&mut buf)?;
+                ssl_stream.write(&buf[..n])?;
+
                 let mut a = stream.try_clone()?;
                 let mut b = ssl_stream.try_clone()?;
 
