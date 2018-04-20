@@ -161,6 +161,23 @@ impl From<Vec<u8>> for ClientKeyEnchange {
     }
 }
 
+#[derive(Debug)]
+struct ChangeCipherSpec {
+    record_type: u8,
+    version: [u8; 2],
+    data: u8,
+}
+
+impl From<Vec<u8>> for ChangeCipherSpec {
+    fn from(vec: Vec<u8>) -> Self {
+        ChangeCipherSpec {
+            record_type: vec[0],
+            version: [vec[1], vec[2]],
+            data: vec[4],
+        }
+    }
+}
+
 fn main() {
     let port = get_port(&mut args()).expect("Invalid Port");
     let server_ip = format!("127.0.0.1:{}", port);
