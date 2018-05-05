@@ -1,16 +1,9 @@
 extern crate reqwest;
 
 use std::{
-    env::{
-        args,
-        Args
-    },
+    env::{args, Args},
     io::prelude::*,
-    net::{
-        Shutdown,
-        TcpListener,
-        TcpStream
-    }
+    net::{Shutdown, TcpListener, TcpStream},
 };
 
 #[derive(Debug)]
@@ -21,7 +14,7 @@ struct ClientHello {
     random: Vec<u8>,
     session_id: Vec<u8>,
     cipher_suite: Vec<u8>,
-    compression_method : Vec<u8>,
+    compression_method: Vec<u8>,
     extensions: Vec<u8>,
 }
 
@@ -60,12 +53,18 @@ impl From<Vec<u8>> for ClientHello {
         let session_id = &vec[44..session_id_end];
         let cipher_suite_length = [vec[session_id_end] as u64, vec[session_id_end + 1] as u64];
         let cipher_suite_length = (cipher_suite_length[0] << 8) + cipher_suite_length[1];
-        let cipher_suite = &vec[session_id_end + 2 .. session_id_end + 2 + cipher_suite_length as usize];
+        let cipher_suite =
+            &vec[session_id_end + 2..session_id_end + 2 + cipher_suite_length as usize];
         let compression_method_length_position = (session_id_end + 2 + cipher_suite.len()) as usize;
         let compression_method_length = vec[compression_method_length_position] as usize;
-        let compression_method_end = compression_method_length_position + 1 + compression_method_length;
-        let compression_method = &vec[compression_method_length_position + 1 .. compression_method_end];
-        let extensions_length = [vec[compression_method_end] as u64, vec[compression_method_end + 1] as u64];
+        let compression_method_end =
+            compression_method_length_position + 1 + compression_method_length;
+        let compression_method =
+            &vec[compression_method_length_position + 1..compression_method_end];
+        let extensions_length = [
+            vec[compression_method_end] as u64,
+            vec[compression_method_end + 1] as u64,
+        ];
         let extensions_length = (extensions_length[0] << 8) + extensions_length[1];
         let extensions_start = compression_method_end + 2;
         let extensions = &vec[extensions_start..extensions_start + extensions_length as usize];
@@ -77,7 +76,7 @@ impl From<Vec<u8>> for ClientHello {
             random: random.to_vec(),
             session_id: session_id.to_vec(),
             cipher_suite: cipher_suite.to_vec(),
-            compression_method : compression_method.to_vec(),
+            compression_method: compression_method.to_vec(),
             extensions: extensions.to_vec(),
         }
     }
@@ -100,11 +99,15 @@ impl From<Vec<u8>> for ServerHello {
     fn from(vec: Vec<u8>) -> Self {
         let random = &vec[11..43];
         let session_id_length = vec[43] as usize;
-        let session_id = &vec[44 .. 44 + session_id_length];
+        let session_id = &vec[44..44 + session_id_length];
         let cipher_suites_start = 44 + session_id_length;
-        let extensions_length = [vec[cipher_suites_start + 3] as u64, vec[cipher_suites_start + 4] as u64];
+        let extensions_length = [
+            vec[cipher_suites_start + 3] as u64,
+            vec[cipher_suites_start + 4] as u64,
+        ];
         let extensions_length = (extensions_length[0] << 8) + extensions_length[1];
-        let extensions = &vec[cipher_suites_start + 5 .. cipher_suites_start + 5 + extensions_length as usize];
+        let extensions =
+            &vec[cipher_suites_start + 5..cipher_suites_start + 5 + extensions_length as usize];
 
         ServerHello {
             msg_type: vec[5],
@@ -132,10 +135,11 @@ struct CertificateMessage {
 impl From<Vec<u8>> for CertificateMessage {
     fn from(vec: Vec<u8>) -> Self {
         let certificate_length = [vec[9] as u64, vec[10] as u64, vec[11] as u64];
-        let certificate_length = ((certificate_length[0] << 16) + (certificate_length[1] << 8) + certificate_length[2]) as usize;
-        let certificate = &vec[12 .. 12 + certificate_length];
+        let certificate_length = ((certificate_length[0] << 16) + (certificate_length[1] << 8)
+            + certificate_length[2]) as usize;
+        let certificate = &vec[12..12 + certificate_length];
 
-        CertificateMessage{
+        CertificateMessage {
             msg_type: vec[5],
             lengh: [vec[6], vec[7], vec[8]],
             certificate: certificate.to_vec(),
@@ -153,7 +157,7 @@ impl From<Vec<u8>> for ClientKeyEnchange {
     fn from(vec: Vec<u8>) -> Self {
         let length = [vec[6] as u64, vec[7] as u64, vec[8] as u64];
         let length = ((length[0] << 16) + (length[1] << 8) + length[2]) as usize;
-        let data = &vec[9 .. length + 9];
+        let data = &vec[9..length + 9];
 
         ClientKeyEnchange {
             data: data.to_vec(),
@@ -185,13 +189,11 @@ fn main() {
     println!("Start Proxy Server: {}", server_ip);
     for stream in server.incoming() {
         let mut stream = stream.unwrap();
-        std::thread::spawn(move || {
-            match handle(&mut stream) {
-                Err(e) => {
-                    println!("Err = {:?}", e);
-                },
-                _ => {}
+        std::thread::spawn(move || match handle(&mut stream) {
+            Err(e) => {
+                println!("Err = {:?}", e);
             }
+            _ => {}
         });
     }
 }
@@ -252,8 +254,7 @@ fn handle(stream: &mut TcpStream) -> Result<(), Box<std::error::Error>> {
             "CONNECT" => {
                 stream.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
 
-                let mut ssl_stream =
-                    TcpStream::connect(request_header[1])?;
+                let mut ssl_stream = TcpStream::connect(request_header[1])?;
 
                 let mut buf = [0u8; 1024];
                 let n = stream.read(&mut buf)?;
